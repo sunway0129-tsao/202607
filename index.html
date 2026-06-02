@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情緒正七邊形共鳴儀</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #060810;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .ui-container {
+            position: absolute;
+            z-index: 10;
+            pointer-events: auto;
+        }
+        .glass {
+            background: rgba(10, 15, 30, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px rgba(255, 255, 255, 0.08) solid;
+        }
+        /* 震動動畫模擬強烈波動 */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(0px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(2px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(2px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .angry-shake {
+            animation: shake 0.5s infinite;
+        }
+        /* 旋轉載入動畫 */
+        @keyframes spin-slow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+            animation: spin-slow 8s linear infinite;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex items-center justify-center text-white">
+
+    <!-- 畫布 -->
+    <canvas id="canvas"></canvas>
+
+    <!-- 初始/輸入面板 -->
+    <div id="welcome-panel" class="ui-container max-w-xl w-11/12 p-6 md:p-8 rounded-2xl glass text-center shadow-2xl transition-all duration-500 scale-100 opacity-100 max-h-[90vh] overflow-y-auto">
+        <h2 class="text-2xl md:text-3xl font-extrabold mb-2 tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-teal-400 via-indigo-400 to-purple-500">
+            幾何情緒共鳴鏡
+        </h2>
+        <p class="text-gray-300 text-xs md:text-sm mb-6 leading-relaxed">
+            這是一面將心境具象化的鏡子。您可以直接在下方寫下你此時此刻的故事與心情，我們將透過 AI 解構您的思緒，為您調配出獨一無二的幾何共鳴。
+        </p>
+
+        <!-- 智慧心情輸入框 -->
+        <div class="mb-6 text-left relative">
+            <label class="block text-xs font-semibold text-teal-300 uppercase tracking-wider mb-2">
+                ✍️ 訴說你當下的感受 (AI 幾何分析依據)
+            </label>
+            <div class="relative rounded-xl overflow-hidden border border-white/10 focus-within:border-teal-400/60 transition">
+                <textarea id="mood-input" rows="3" 
+                    placeholder="例如：今天一整天都在忙碌，雖然有點累，但晚上跟朋友散步聊天，吹著微風覺得內心很溫暖和平靜..." 
+                    class="w-full bg-slate-950/80 p-4 text-sm text-gray-100 placeholder-gray-500 focus:outline-none resize-none"></textarea>
+            </div>
+            <button onclick="analyzeTextEmotion()" class="w-full mt-3 bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-400 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+                <span>✨ 分析心境並啟動共鳴</span>
+            </button>
+        </div>
+
+        <div class="relative flex py-2 items-center">
+            <div class="flex-grow border-t border-white/5"></div>
+            <span class="flex-shrink mx-4 text-xs text-gray-500 uppercase tracking-widest">或快速選擇經典情緒</span>
+            <div class="flex-grow border-t border-white/5"></div>
+        </div>
+
+        <!-- 快速情緒選擇 -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+            <button onclick="selectPreset('joy')" class="flex flex-col items-center p-3 rounded-xl bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/20 hover:border-amber-500/50 transition group">
+                <span class="text-3xl mb-1 group-hover:scale-110 transition">😊</span>
+                <span class="font-bold text-xs text-amber-300">喜 (Joy)</span>
+            </button>
+            <button onclick="selectPreset('anger')" class="flex flex-col items-center p-3 rounded-xl bg-red-500/5 hover:bg-red-500/15 border border-red-500/20 hover:border-red-500/50 transition group">
+                <span class="text-3xl mb-1 group-hover:scale-110 transition">🔥</span>
+                <span class="font-bold text-xs text-red-400">怒 (Anger)</span>
+            </button>
+            <button onclick="selectPreset('sadness')" class="flex flex-col items-center p-3 rounded-xl bg-blue-500/5 hover:bg-blue-500/15 border border-blue-500/20 hover:border-blue-500/50 transition group">
+                <span class="text-3xl mb-1 group-hover:scale-110 transition">💧</span>
+                <span class="font-bold text-xs text-blue-300">哀 (Sadness)</span>
+            </button>
+            <button onclick="selectPreset('excitement')" class="flex flex-col items-center p-3 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/15 border border-emerald-500/20 hover:border-emerald-500/50 transition group">
+                <span class="text-3xl mb-1 group-hover:scale-110 transition">🎉</span>
+                <span class="font-bold text-xs text-emerald-300">樂 (Excitement)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- AI 載入遮罩 -->
+    <div id="loading-overlay" class="ui-container hidden flex-col items-center justify-center p-8 rounded-2xl glass shadow-2xl max-w-sm text-center">
+        <div class="relative w-20 h-20 mb-4 flex items-center justify-center">
+            <!-- 模擬正七邊形旋轉載入圈 -->
+            <div class="absolute inset-0 rounded-full border-4 border-teal-500/10 border-t-teal-400 border-r-indigo-500 animate-spin"></div>
+            <span class="text-2xl">🧠</span>
+        </div>
+        <h3 class="text-lg font-bold text-teal-300 mb-1">情感幾何解構中...</h3>
+        <p class="text-xs text-gray-400">正在分析您的文字語意與情緒波動頻率</p>
+    </div>
+
+    <!-- 即時狀態面板與切換鍵 (預設隱藏) -->
+    <div id="info-panel" class="ui-container hidden top-6 left-6 p-5 rounded-xl glass max-w-xs md:max-w-sm shadow-xl text-xs md:text-sm">
+        <div class="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+            <span id="emotion-badge" class="px-2 py-1 rounded font-bold tracking-wide"></span>
+            <button onclick="resetToMenu()" class="text-xs text-gray-400 hover:text-white underline pointer-events-auto transition">返回大廳</button>
+        </div>
+        <p class="text-gray-400 leading-relaxed">心境特徵：<span id="state-desc" class="text-white font-medium"></span></p>
+        <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] text-gray-400 border-t border-white/5 pt-2">
+            <div>目前尺寸：<span id="current-length" class="text-teal-300 font-mono">0.5 cm</span></div>
+            <div>旋轉速率：<span id="current-speed" class="text-indigo-300 font-mono">0.02</span></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const welcomePanel = document.getElementById('welcome-panel');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const infoPanel = document.getElementById('info-panel');
+        const emotionBadge = document.getElementById('emotion-badge');
+        const stateDesc = document.getElementById('state-desc');
+        const currentLengthSpan = document.getElementById('current-length');
+        const currentSpeedSpan = document.getElementById('current-speed');
+        const moodInput = document.getElementById('mood-input');
+
+        const CM_TO_PX = 37.8; // 1公分約 37.8 像素
+        const SIDES = 7;      // 正七邊形
+        
+        let sideLengthCm = 0.5;
+        let rotation = 0;
+        let animationFrameId = null;
+        let breathTheta = 0; // 用於控制正弦呼吸波形的角度與速度
+
+        // 目前運作中的動態物理配置
+        let activeConfig = {
+            badgeText: '',
+            badgeClass: '',
+            desc: '',
+            speed: 0.02,
+            breathSpeed: 0.01,
+            minSize: 0.5,
+            maxSize: 8.0,
+            colorFunc: (ratio) => `hsla(180, 100%, 50%, 0.8)`,
+            baseLineWidth: 2,
+            glowColor: 'rgba(20, 184, 166, 0.1)',
+            trailOpacity: 0.05,
+            shake: false
+        };
+
+        // 經典內建情緒配置
+        const presetParams = {
+            joy: {
+                badgeText: '😊 喜 (Joy)',
+                badgeClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
+                desc: '和緩的呼吸律動。圖形收放如溫暖陽光般輕柔、明亮。',
+                speed: 0.015,
+                breathSpeed: 0.01,
+                minSize: 0.5,
+                maxSize: 8.0,
+                colorFunc: (ratio) => {
+                    const h = 45 - ratio * 30; 
+                    return `hsla(${h}, 95%, 60%, 0.75)`;
+                },
+                baseLineWidth: 1.5,
+                glowColor: 'rgba(245, 158, 11, 0.08)',
+                trailOpacity: 0.03,
+                shake: false
+            },
+            anger: {
+                badgeText: '🔥 怒 (Anger)',
+                badgeClass: 'bg-red-500/20 text-red-300 border border-red-500/40',
+                desc: '強烈急促的急速擴張與收縮，震顫感明顯，光芒四射。',
+                speed: 0.12,
+                breathSpeed: 0.06,
+                minSize: 0.5,
+                maxSize: 12.0,
+                colorFunc: (ratio) => {
+                    const h = ratio * 50; 
+                    return `hsla(${h}, 100%, 55%, 0.9)`;
+                },
+                baseLineWidth: 3.0,
+                glowColor: 'rgba(239, 68, 68, 0.15)',
+                trailOpacity: 0.1,
+                shake: true
+            },
+            sadness: {
+                badgeText: '💧 哀 (Sadness)',
+                badgeClass: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
+                desc: '如淚水漣漪般沉靜、微弱而悠長地舒張與凝聚。',
+                speed: 0.004,
+                breathSpeed: 0.005,
+                minSize: 0.5,
+                maxSize: 5.0,
+                colorFunc: (ratio) => {
+                    const h = 220 - ratio * 40;
+                    return `hsla(${h}, 60%, 50%, 0.45)`;
+                },
+                baseLineWidth: 1.0,
+                glowColor: 'rgba(59, 130, 246, 0.05)',
+                trailOpacity: 0.015,
+                shake: false
+            },
+            excitement: {
+                badgeText: '🎉 樂 (Excitement)',
+                badgeClass: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+                desc: '輕快地躍動、跳躍式大小變化，色彩絢麗斑斕。',
+                speed: 0.06,
+                breathSpeed: 0.035,
+                minSize: 0.5,
+                maxSize: 10.0,
+                colorFunc: (ratio) => {
+                    const h = (ratio * 360 + (Date.now() / 50)) % 360;
+                    return `hsla(${h}, 100%, 65%, 0.8)`;
+                },
+                baseLineWidth: 2.0,
+                glowColor: 'rgba(16, 185, 129, 0.1)',
+                trailOpacity: 0.06,
+                shake: false
+            }
+        };
+
+        // RWD 畫布調整
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (activeConfig.badgeText) {
+                ctx.fillStyle = '#060810';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 快速選擇經典情緒
+        function selectPreset(emotion) {
+            const config = presetParams[emotion];
+            startAnimation(config);
+        }
+
+        // 開始繪製動畫
+        function startAnimation(config) {
+            activeConfig = config;
+            sideLengthCm = 0.5;
+            rotation = 0;
+            breathTheta = 0;
+
+            // 關閉面板
+            welcomePanel.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+            loadingOverlay.classList.add('hidden');
+            
+            setTimeout(() => {
+                welcomePanel.classList.add('hidden');
+                infoPanel.classList.remove('hidden');
+                infoPanel.classList.add('opacity-100');
+            }, 300);
+
+            // 更新資訊看板
+            emotionBadge.innerText = config.badgeText;
+            emotionBadge.className = `px-2 py-1 rounded font-bold tracking-wide ${config.badgeClass || 'bg-teal-500/20 text-teal-300 border border-teal-500/40'}`;
+            stateDesc.innerText = config.desc;
+            currentSpeedSpan.innerText = config.speed.toFixed(3);
+
+            // 震動判定
+            if (config.shake) {
+                canvas.classList.add('angry-shake');
+            } else {
+                canvas.classList.remove('angry-shake');
+            }
+
+            // 初始化背景
+            ctx.fillStyle = '#060810';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animate();
+        }
+
+        // 返回大廳
+        function resetToMenu() {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            canvas.classList.remove('angry-shake');
+
+            infoPanel.classList.add('hidden');
+            welcomePanel.classList.remove('hidden');
+            setTimeout(() => {
+                welcomePanel.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+                welcomePanel.classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+            }, 50);
+
+            ctx.fillStyle = '#060810';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 繪製正七邊形
+        function drawHeptagon(x, y, length, angle, color, lineWidth) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            
+            const radius = length / (2 * Math.sin(Math.PI / SIDES));
+
+            for (let i = 0; i <= SIDES; i++) {
+                const theta = angle + (i * 2 * Math.PI / SIDES);
+                const px = x + radius * Math.cos(theta);
+                const py = y + radius * Math.sin(theta);
+                if (i === 0) {
+                    ctx.moveTo(px, py);
+                } else {
+                    ctx.lineTo(px, py);
+                }
+            }
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        // 動態主迴圈
+        function animate() {
+            if (!activeConfig.badgeText) return;
+
+            // 1. 繪製微透明背景以營造殘影
+            ctx.fillStyle = `rgba(6, 8, 16, ${activeConfig.trailOpacity})`;
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. 切換至發光混合模式
+            ctx.globalCompositeOperation = 'screen';
+
+            let centerX = canvas.width / 2;
+            let centerY = canvas.height / 2;
+
+            if (activeConfig.shake) {
+                centerX += (Math.random() - 0.5) * 8;
+                centerY += (Math.random() - 0.5) * 8;
+            }
+
+            // 3. 計算正弦波形（呼吸效果）
+            breathTheta += activeConfig.breathSpeed;
+            const sizeRatio = (Math.sin(breathTheta) + 1) / 2; 
+            sideLengthCm = activeConfig.minSize + (activeConfig.maxSize - activeConfig.minSize) * sizeRatio;
+
+            const currentPx = sideLengthCm * CM_TO_PX;
+
+            // 4. 中心發光底色
+            const glowRadius = currentPx * 0.6;
+            if (glowRadius > 5) {
+                const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius);
+                gradient.addColorStop(0, activeConfig.glowColor);
+                gradient.addColorStop(1, 'rgba(6, 8, 16, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, glowRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 5. 繪製
+            const dynamicLineWidth = activeConfig.baseLineWidth * (0.6 + sizeRatio * 1.8);
+            const color = activeConfig.colorFunc(sizeRatio);
+
+            drawHeptagon(centerX, centerY, currentPx, rotation, color, dynamicLineWidth);
+
+            rotation += activeConfig.speed;
+
+            // 更新面板狀態
+            currentLengthSpan.innerText = `${sideLengthCm.toFixed(2)} cm`;
+
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        // ==================== AI 情緒分析黑科技 ====================
+
+        // 本地備用分析器 (在斷網、API Key 未填或出錯時自動順暢接軌)
+        function analyzeTextLocally(text) {
+            let emotion = 'joy';
+            let config = presetParams.joy; // 預設為喜
+
+            const angerKeywords = ['怒', '生氣', '煩', '幹', '滾', '恨', '爆', '狂', '抓狂', '討厭', '堵爛'];
+            const sadnessKeywords = ['哀', '悲', '難過', '哭', '寂寞', '孤單', '痛', '慘', '淚', '失戀', '累', '委屈'];
+            const excitementKeywords = ['樂', '爽', '興奮', '耶', '哇', '棒', '狂歡', '嗨', '讚', '贏', '狂喜'];
+            const calmKeywords = ['平靜', '安靜', '放鬆', '微風', '舒服', '漫步', '沉靜', '禪', '日常'];
+
+            if (angerKeywords.some(kw => text.includes(kw))) {
+                config = presetParams.anger;
+                config.badgeText = '🔥 本地分析：怒火燃燒';
+            } else if (sadnessKeywords.some(kw => text.includes(kw))) {
+                config = presetParams.sadness;
+                config.badgeText = '💧 本地分析：細雨哀思';
+            } else if (excitementKeywords.some(kw => text.includes(kw))) {
+                config = presetParams.excitement;
+                config.badgeText = '🎉 本地分析：躍動狂歡';
+            } else if (calmKeywords.some(kw => text.includes(kw))) {
+                // 專屬平靜配置
+                config = {
+                    badgeText: '😌 本地分析：恬靜怡然',
+                    badgeClass: 'bg-teal-500/20 text-teal-300 border border-teal-500/40',
+                    desc: '微風徐徐的幾何波紋。轉速平緩，呼吸深沉。',
+                    speed: 0.008,
+                    breathSpeed: 0.008,
+                    minSize: 0.5,
+                    maxSize: 6.5,
+                    colorFunc: (ratio) => `hsla(${170 + ratio * 30}, 80%, 55%, 0.65)`,
+                    baseLineWidth: 1.5,
+                    glowColor: 'rgba(20, 184, 166, 0.08)',
+                    trailOpacity: 0.02,
+                    shake: false
+                };
+            } else {
+                // 預設自由共鳴
+                config = {
+                    badgeText: '🎐 本地分析：隨風共鳴',
+                    badgeClass: 'bg-slate-500/20 text-slate-300 border border-slate-500/40',
+                    desc: '溫和柔潤的幾何波紋，默默地守候此時此刻。',
+                    speed: 0.02,
+                    breathSpeed: 0.012,
+                    minSize: 0.5,
+                    maxSize: 7.5,
+                    colorFunc: (ratio) => `hsla(${140 + ratio * 100}, 75%, 60%, 0.7)`,
+                    baseLineWidth: 1.8,
+                    glowColor: 'rgba(99, 102, 241, 0.08)',
+                    trailOpacity: 0.04,
+                    shake: false
+                };
+            }
+            return config;
+        }
+
+        // 調用 Gemini API 來做高精度情感幾何分析
+        async function analyzeTextEmotion() {
+            const text = moodInput.value.trim();
+            if (!text) {
+                // 沒有輸入文字直接隨機選一個
+                const presets = ['joy', 'anger', 'sadness', 'excitement'];
+                selectPreset(presets[Math.floor(Math.random() * presets.length)]);
+                return;
+            }
+
+            // 顯示載入動畫
+            welcomePanel.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+            setTimeout(() => {
+                welcomePanel.classList.add('hidden');
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+            }, 300);
+
+            const apiKey = ""; // Canvas 運行時由環境提供
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const systemPrompt = `你是一位專業的「情緒幾何學家」。使用者會輸入一段心情或當下的想法，你需要解讀其文字背後的深層情緒波動（不限於喜怒哀樂，可以是平靜、焦慮、期待、孤獨等），並為其量身打造一套「正七邊形動態螺旋」的物理渲染參數，以 JSON 格式輸出。
+
+請嚴格根據情緒強烈度與類型，調整以下物理參數：
+1. speed (旋轉速度): 介於 0.002 到 0.15。情緒越平靜悠長越慢、越焦慮狂躁越快。
+2. breathSpeed (縮放擴展速度): 介於 0.003 到 0.07。
+3. minSize (最小邊長): 固定為 0.5 (公分)。
+4. maxSize (最大擴展邊長): 介於 4.0 (壓抑內斂) 到 13.0 (狂熱爆發) 公分。
+5. hueStart (漸變起始色相 0~360): 情緒主色（如暖色0-60，冷色180-260，中性、迷幻等）。
+6. hueEnd (漸變結束色相 0~360): 呼吸到最大尺寸時的色相。
+7. saturation (色彩飽和度百分比，如 "85%"): 情緒純度越濃越飽和。
+8. lightness (色彩亮度百分比，如 "55%"): 
+9. baseLineWidth (基礎線寬 1.0 ~ 4.0):
+10. trailOpacity (殘影濃度 0.01 ~ 0.15): 殘影小於 0.03 代表綿密慢速殘影，大於 0.08 代表強烈殘留。
+11. shake (布林值): 是否帶有晃動震顫感（極度生氣、焦慮、興奮時為 true）。
+12. glowColor (中心發光顏色 rgba 格式，如 'rgba(255, 120, 0, 0.1)'): 必須和色相呼應。
+13. badgeText: 情緒標籤，格式為 "Emoji 狀態描述"，如 "😌 寧靜祥和"、"🌀 思緒雜亂"。
+14. desc: 對該情緒幾何特徵的一句極優雅的文學描述。`;
+
+            const requestPayload = {
+                contents: [{ parts: [{ text: `使用者心情："${text}"` }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            speed: { type: "NUMBER" },
+                            breathSpeed: { type: "NUMBER" },
+                            minSize: { type: "NUMBER" },
+                            maxSize: { type: "NUMBER" },
+                            hueStart: { type: "NUMBER" },
+                            hueEnd: { type: "NUMBER" },
+                            saturation: { type: "STRING" },
+                            lightness: { type: "STRING" },
+                            baseLineWidth: { type: "NUMBER" },
+                            trailOpacity: { type: "NUMBER" },
+                            shake: { type: "BOOLEAN" },
+                            glowColor: { type: "STRING" },
+                            badgeText: { type: "STRING" },
+                            desc: { type: "STRING" }
+                        },
+                        required: ["speed", "breathSpeed", "minSize", "maxSize", "hueStart", "hueEnd", "saturation", "lightness", "baseLineWidth", "trailOpacity", "shake", "glowColor", "badgeText", "desc"]
+                    }
+                }
+            };
+
+            let success = false;
+            let analyzedConfig = null;
+
+            // 實作帶有指數型倒退的自動重試機制 (最高 5 次)
+            let retries = 5;
+            let delay = 1000;
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestPayload)
+                    });
+
+                    if (!response.ok) throw new Error('API request failed');
+
+                    const result = await response.json();
+                    const rawJsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (rawJsonText) {
+                        const parsed = JSON.parse(rawJsonText);
+                        
+                        // 轉換為動畫能讀取的動態 config 結構
+                        analyzedConfig = {
+                            badgeText: parsed.badgeText,
+                            badgeClass: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40',
+                            desc: parsed.desc,
+                            speed: parsed.speed,
+                            breathSpeed: parsed.breathSpeed,
+                            minSize: parsed.minSize,
+                            maxSize: parsed.maxSize,
+                            colorFunc: (ratio) => {
+                                // 動態色相與亮度在呼氣吸氣之間過渡
+                                const currentHue = parsed.hueStart + (parsed.hueEnd - parsed.hueStart) * ratio;
+                                return `hsla(${currentHue}, ${parsed.saturation}, ${parsed.lightness}, 0.75)`;
+                            },
+                            baseLineWidth: parsed.baseLineWidth,
+                            glowColor: parsed.glowColor,
+                            trailOpacity: parsed.trailOpacity,
+                            shake: parsed.shake
+                        };
+                        success = true;
+                        break;
+                    }
+                } catch (err) {
+                    // 自動進行下一次指數型退避重試
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+
+            // 如果 AI 分析成功，載入專屬渲染器；若失敗（如離線、API失效），無縫降級到本地智慧匹配分析器
+            if (success && analyzedConfig) {
+                startAnimation(analyzedConfig);
+            } else {
+                console.log("使用本地分析機制備援...");
+                const fallbackConfig = analyzeTextLocally(text);
+                startAnimation(fallbackConfig);
+            }
+        }
+    </script>
+</body>
+</html>
